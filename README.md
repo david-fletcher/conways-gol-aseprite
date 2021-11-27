@@ -2,6 +2,8 @@
 
 Using the Aseprite scripting API (written in Lua) to simulate Conway's Game Of Life
 
+![game of life demo](./conways-gol-200.gif)
+
 ## What is the Game of Life?
 
 It is governed by some simple rules. To start, the "map" is divided up into "cels" (in this case, 1 pixel = 1 cel). A cel can have two states: "alive" (black pixel), or "dead" (white pixel). Each cel has 8 neighbors surrounding it (horizontally, vertically, and diagonally).
