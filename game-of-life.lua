@@ -32,19 +32,19 @@ local function getNeighborOffsets(x, y, rows, cols)
     local right = 1
 
     if (y == 1) then
-        left = rows - 1
+        left = cols - 1
     end
 
-    if (y == rows) then
-        right = 1 - rows
+    if (y == cols) then
+        right = 1 - cols
     end
 
     if (x == 1) then
-        up = cols - 1
+        up = rows - 1
     end
 
-    if (x == cols) then
-        down = 1 - cols
+    if (x == rows) then
+        down = 1 - rows
     end
 
     return up, down, left, right
@@ -53,9 +53,9 @@ end
 local function initMap(rows, cols)
     local map = {}
 
-    for i=1,cols do
+    for i=1,rows do
         map[i] = {}
-        for j=1,rows do
+        for j=1,cols do
             map[i][j] = { state=false, neighbors=0 }
         end
     end
@@ -66,9 +66,9 @@ end
 local function copyMap(map, rows, cols)
     local newMap = {}
     
-    for i=1,cols do
+    for i=1,rows do
         newMap[i] = {}
-        for j=1,rows do
+        for j=1,cols do
             newMap[i][j] = {}
             newMap[i][j].state = map[i][j].state
             newMap[i][j].neighbors = map[i][j].neighbors
@@ -111,13 +111,13 @@ local function unsetCel(map, x, y, rows, cols)
 end
 
 local function isCelSet(map, x, y)
-    return map[y][x].state
+    return map[x][y].state
 end
 
 local function initGeneration(map, rows, cols)
     math.randomseed(os.time())
-    for i=1,cols do
-        for j=1,rows do
+    for i=1,rows do
+        for j=1,cols do
             local r = math.random(1,10)
             if (r % 4 == 0) then
                 setCel(map, i, j, rows, cols)
@@ -128,8 +128,8 @@ end
 
 local function nextGeneration(map, rows, cols)
     local nextMap = copyMap(map, rows, cols)
-    for i=1,cols do
-        for j=1,rows do
+    for i=1,rows do
+        for j=1,cols do
             local cel = map[i][j]
             local skip = (cel.neighbors == 0) and (not cel.state)
             if (not skip) and (cel.state) and ((cel.neighbors < 2) or (cel.neighbors > 3)) then
@@ -159,12 +159,35 @@ local function initScreen(image)
     end
 end
 
+local function readScreen(image, map, rows, cols)
+    local nextMap = copyMap(map, rows, cols)
+    for pixel in image:pixels() do
+        if (pixel() == BLACK) then
+            local x, y = getMapCoordinates(pixel)
+            setCel(nextMap, x, y, rows, cols)
+        end
+    end
+
+    return nextMap
+end
+
 local function drawMap(map, image)
     for pixel in image:pixels() do
         local x, y = getMapCoordinates(pixel)
         if (isCelSet(map, x, y)) then
             pixel(BLACK)
         end
+    end
+end
+
+local function runSimulation(map, iterations, rows, cols)
+    -- loop through the next generations
+    for i=2,iterations do
+        local cel = app.activeSprite:newCel(app.activeLayer, app.activeSprite:newEmptyFrame())
+        cel.image = Image(rows, cols)
+        initScreen(cel.image)
+        map = nextGeneration(map, rows, cols)
+        drawMap(map, cel.image)
     end
 end
 
@@ -195,6 +218,11 @@ local function mainWindow()
         decimals=0
     }
 
+    dialog:check {
+        id="draw_init",
+        text="Draw initial generation?"
+    }
+
     dialog:separator {
         id="acions",
         text="Actions"
@@ -208,6 +236,22 @@ local function mainWindow()
     dialog:button {
         id="generate",
         text="Generate"
+    }
+
+    return dialog
+end
+
+local function drawWindow(map, image, iterations, rows, cols)
+    local dialog = Dialog("Draw First Generation")
+    
+    dialog:button {
+        id="generate",
+        text="Finish and Generate",
+        onclick=function ()
+            local userMap = readScreen(image, map, rows, cols)
+            runSimulation(userMap, iterations, rows, cols)
+            dialog:close()
+        end
     }
 
     return dialog
@@ -233,16 +277,27 @@ if (window.data.generate) then
     initScreen(cel.image)
     local map = initMap(rows, cols)
 
-    -- draw the first generation
-    initGeneration(map, rows, cols)
-    drawMap(map, cel.image)
+    if (window.data.draw_init) then
+        -- set up the brush for drawing
+        local brush = Brush {
+            type=BrushType.SQUARE,
+            size=1
+        }
 
-    -- loop through the next generations
-    for i=2,window.data.iterations do
-        local cel = app.activeSprite:newCel(app.activeLayer, app.activeSprite:newEmptyFrame())
-        cel.image = Image(rows, cols)
-        initScreen(cel.image)
-        map = nextGeneration(map, rows, cols)
+        -- set up the tool to use
+        app.useTool {
+            color=Color(BLACK),
+            brush=brush,
+            cel=cel
+        }
+
+        -- user is drawing the first generation
+        local drawwin = drawWindow(map, cel.image, window.data.iterations, rows, cols)
+        drawwin:show{ wait=false, bounds=Rectangle(1, 1, 200, 30) }
+    else
+        -- randomly determine the first generation
+        initGeneration(map, rows, cols)
         drawMap(map, cel.image)
+        runSimulation(map, window.data.iterations, rows, cols)
     end
 end
